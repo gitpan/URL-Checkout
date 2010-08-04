@@ -1,5 +1,11 @@
 Revision history for URL-Checkout
 
+1.02	Thu Aug  5 01:37:46 CEST 2010
+	demo script url_co.pl was missing in MANIFEST
+
+1.01	jw, Thu Aug  5 01:37:26 CEST 2010
+	It works. surprisingly well.
+
 0.01    jw, Wed Aug  4 02:10:03 CEST 2010
         Completed coding in one go. Nothing tested.
 	Offering wget, git, svn.
