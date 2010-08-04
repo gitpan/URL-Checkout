@@ -1,0 +1,6 @@
+Revision history for URL-Checkout
+
+0.01    jw, Wed Aug  4 02:10:03 CEST 2010
+        Completed coding in one go. Nothing tested.
+	Offering wget, git, svn.
+
