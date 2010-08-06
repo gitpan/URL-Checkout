@@ -14,11 +14,11 @@ URL::Checkout - Get one or multiple files from a remote location
 
 =head1 VERSION
 
-Version 1.02
+Version 1.03
 
 =cut
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 
 =head1 SYNOPSIS
@@ -61,6 +61,7 @@ An alternative to specifying user, pass with C<new>.
 Provide authentication credentials for the remote access. 
 
 =head2 dest($directory)
+
 =head2 dest()
 
 Set and/or get the destination directory. The directory need not be created ahead of time.
@@ -70,6 +71,10 @@ Set and/or get the destination directory. The directory need not be created ahea
 Return a hash with method names as keys, detection patterns and retrieval commands.
 The values in this hash are aliases to the internal values. You can change them to e.g. 
 add a -q flag if you find a command to be too noisy.
+
+=head2 describe()
+
+Returns a verbal description of the matching rules.
 
 =head2 add_method(name, qr{url-match-pattern}, cmd_fmt, cmd_fmt, ...)
 
@@ -104,6 +109,8 @@ sub new
   [
     { name => 'obs', pat => [qr{^(obs://|https://api\.(opensuse\.org|suse\.de)/(public/)?source/)}],
       osc => ['osc'], co => ['co', '--current-dir', '--expand-link'], 
+      desc => "OpenSUSE Build Service(obs): URLs starting with obs://, https://api.opensuse.org/, https://api.suse.de are handled by 'osc checkout'. Path components /public and /source are stripped, the remaining path components are Project, Package, and optionally File. Project can be written as either a:/b:/c: or a:b:c",
+
       cmd => sub { my ($url, $m) = @_;
         my $api = $1 if $url =~ s{^\w+://([^/]+)/+}{};	
 	$url =~ s{^(public/+)?sources?/+}{};
@@ -117,14 +124,17 @@ sub new
 	return [ shell_quote(@cmd, '-S', @pp), shell_quote(@cmd, @pp)];
       } },
 
-    { name => 'git', pat => [qr{^(git://.*|\.git/?)$}], 
+    { name => 'git', pat => [qr{(^git://|\.git/?$)}], 
+      desc => "git: URLs starting with git:// or ending in .git are handled by 'git clone'",
       cmd => ["git clone --depth 1 %{url}"] },
 
-    { name => 'svn', pat => [qr{^svn://}, qr{/svn[\./].*/(trunk|branches)/}, qr{/svn[\./]}], 
+    { name => 'svn', pat => [qr{^svn://}, qr{[/@]svn(root)?[\./].*/(trunk|branches)/}, qr{[/@]svn(root)?[\./]}], 
+      desc => "Subversion(svn): URLs starting with git:// or containing /svn. follwoed by /trunk/ or /branches/ or containing /svn/ followed by /trunk/ or /branches/ are handled by 'svn checkout'. Second Prio: URLs containing only /svn. or /svn/",
       cmd => ["svn --no-auth-cache --non-interactive --trust-server-cert co -q --force %{url}",
               "svn --no-auth-cache --non-interactive --trust-server-cert --username %{user} --password %{pass} co -q --force %{url}" ] },
 
     { name => 'http', pat => [undef, undef, qr{^https?://}], 
+      desc => "WWW(http): URLs starting with http:// or https:// are handled as third priority with 'wget -m', this third priority is a fallback, if no first or second priority commands match",
       cmd => ["wget -m -np -nd -nH --no-check-certificate -e robots=off %{url}"] },
   ];
 
@@ -153,6 +163,12 @@ sub auth
 sub list_methods
 {
   return $_[0]->{_methods};
+}
+
+sub describe
+{
+  my @d = map { $_->{desc} } @{$_[0]->{_methods}};
+  return (wantarray ? @d : join("\n\n", @d)."\n");
 }
 
 sub method
@@ -184,6 +200,8 @@ sub find_method
       $max_pat_idx = $#{$m->{pat}} if $#{$m->{pat}} > $max_pat_idx;
     }
 
+use Data::Dumper;
+print Dumper $self;
   # match method patterns, breadth first
   for my $sel (@{$self->{_sel}})
     {
@@ -204,7 +222,7 @@ sub find_method
       next if $sel eq '*';
       for my $m (@{$self->{_methods}})
         {
-	  return $m if $sel ne $m->{name};
+	  return $m if $sel eq $m->{name};
 	}
     }
 
@@ -251,7 +269,7 @@ sub fmt_cmd
       push @cmd, sprintf $cmd, $url_q, $user_q, $pass_q;
     }
 
-  return @cmd;
+  return wantarray ? @cmd : $cmd[0];
 }
 
 =head2 get($url)
@@ -259,10 +277,10 @@ sub fmt_cmd
 Similar to this code:
 
     $m = $f->find_method($url);
-    system $f->fmt_cmd($m, $url);
+    system "".$f->fmt_cmd($m, $url);
 
 Except that it tries further commands from C<fmt_cmd()> if if the first fails.
-It also assures that the current working directory is C<$f->dest()> while executing a command.
+It also assures that the current working directory is C<< $f->dest() >> while executing a command.
 Command names are printed to stdout, if verbose is set.
 
 =cut

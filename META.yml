@@ -1,22 +1,20 @@
 --- #YAML:1.0
-name:               URL-Checkout
-version:            1.02
-abstract:           Get one or multiple files from a remote location
-author:
+name:                URL-Checkout
+version:             1.03
+abstract:            Get one or multiple files from a remote location
+license:             perl
+author:              
     - Juergen Weigert <jnw@cpan.org>
-license:            perl
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
-build_requires:
-    ExtUtils::MakeMaker:  0
-requires:
-    Test::More:  0
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.56
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
+    Carp:                          0
+    Cwd:                           0
+    File::Path:                    0
+    File::Temp:                    0
+    String::ShellQuote:            0
+    Test::More:                    0
+    Test::Pod::Coverage:           0
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

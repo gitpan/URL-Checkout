@@ -1,5 +1,11 @@
 Revision history for URL-Checkout
 
+1.03	jw, Fri Aug  6 14:29:36 CEST 2010
+	Testsuite added with a list of known URLs and Commands.
+	Added 01-init.t, 02-urls.t
+	Fixed name matching bug in find_method(). 'ne' is now 'eq'
+	Added description texts and method describe().
+
 1.02	Thu Aug  5 01:37:46 CEST 2010
 	demo script url_co.pl was missing in MANIFEST
 
