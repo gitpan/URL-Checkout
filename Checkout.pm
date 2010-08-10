@@ -3,6 +3,7 @@ package URL::Checkout;
 use warnings;
 use strict;
 use String::ShellQuote;
+use Text::Sprintf::Named;
 use Cwd;
 use File::Path;
 use File::Temp;
@@ -14,11 +15,11 @@ URL::Checkout - Get one or multiple files from a remote location
 
 =head1 VERSION
 
-Version 1.03
+Version 1.04
 
 =cut
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 
 =head1 SYNOPSIS
@@ -76,19 +77,23 @@ add a -q flag if you find a command to be too noisy.
 
 Returns a verbal description of the matching rules.
 
-=head2 add_method(name, qr{url-match-pattern}, cmd_fmt, cmd_fmt, ...)
+=head2 add_method(name, qr{url-match-pattern}, cmd_fmt_string, "Some descriptive text") 
 
 Multiple commands can be specified for each name. Commands should be written in bourne shell 
-syntax, with the following templates: %{user}, %{pass}, %{url}, %{dest}.
-Commands that contain %{user} and/or %{pass} are ignored, if username and/or password 
+syntax, with the following named sprintf templates: %(user)s, %(pass)s, %(url)s, %(dest)s.
+Commands that contain %(user)s and/or %(pass)s are ignored, if username and/or password 
 credentials are not given. Example:
 
-  add_method('git', qr{^(git://.*|\.git/?)$}, "git clone --depth 1 %{url}");
+  add_method('git', qr{^(git://.*|\.git/?)$}, "git clone --depth 1 %(url)s");
 
 The destination directory is the current working directory while the command runs.
-The templates are expanded using String::ShellQuote.
+The templates are expanded using String::ShellQuote and Text::Sprintf::Named.
+
 If an array-ref of patterns is specified instead of a pattern, the patterns
 should be ordered by decreasing reliability. Methods are tested breadth-first.
+
+If a subroutine reference is specified as third parameter, it is called with the URL and the 
+return value of find_method(), and is expected to return a command or an array of commands.
 
 =head2 method('*')
 
@@ -126,16 +131,16 @@ sub new
 
     { name => 'git', pat => [qr{(^git://|\.git/?$)}], 
       desc => "git: URLs starting with git:// or ending in .git are handled by 'git clone'",
-      cmd => ["git clone --depth 1 %{url}"] },
+      cmd => ["git clone --depth 1 %(url)s"] },
 
     { name => 'svn', pat => [qr{^svn://}, qr{[/@]svn(root)?[\./].*/(trunk|branches)/}, qr{[/@]svn(root)?[\./]}], 
       desc => "Subversion(svn): URLs starting with git:// or containing /svn. follwoed by /trunk/ or /branches/ or containing /svn/ followed by /trunk/ or /branches/ are handled by 'svn checkout'. Second Prio: URLs containing only /svn. or /svn/",
-      cmd => ["svn --no-auth-cache --non-interactive --trust-server-cert co -q --force %{url}",
-              "svn --no-auth-cache --non-interactive --trust-server-cert --username %{user} --password %{pass} co -q --force %{url}" ] },
+      cmd => ["svn --no-auth-cache --non-interactive --trust-server-cert co -q --force %(url)s",
+              "svn --no-auth-cache --non-interactive --trust-server-cert --username %(user)s --password %(pass)s co -q --force %(url)s" ] },
 
     { name => 'http', pat => [undef, undef, qr{^https?://}], 
       desc => "WWW(http): URLs starting with http:// or https:// are handled as third priority with 'wget -m', this third priority is a fallback, if no first or second priority commands match",
-      cmd => ["wget -m -np -nd -nH --no-check-certificate -e robots=off %{url}"] },
+      cmd => ["wget -m -np -nd -nH --no-check-certificate -e robots=off %(url)s"] },
   ];
 
   $obj{_sel} = ['*'];
@@ -200,8 +205,6 @@ sub find_method
       $max_pat_idx = $#{$m->{pat}} if $#{$m->{pat}} > $max_pat_idx;
     }
 
-use Data::Dumper;
-print Dumper $self;
   # match method patterns, breadth first
   for my $sel (@{$self->{_sel}})
     {
@@ -255,18 +258,23 @@ sub fmt_cmd
     {
       my $need_user = 0;
       my $need_pass = 0;
-      $need_user++ if $cmd =~ s{%{user}}{%2\$s};
-      $need_pass++ if $cmd =~ s{%{pass}}{%3\$s};
-      $cmd =~ s{%{url}}{%1\$s};
+      my $need_dest = 0;
+      $need_user++ if $cmd =~ m{%\(user\)};
+      $need_pass++ if $cmd =~ m{%\(pass\)};
+      $need_dest++ if $cmd =~ m{%\(dest\)};
 
+      $self->dest() if $need_dest;	# creates tempdir
       next if $need_pass and !defined($self->{pass});
       next if $need_user and !defined($self->{user});
 
-      my $url_q = shell_quote($url);
-      my $user_q = shell_quote($self->{user}||'');
-      my $pass_q = shell_quote($self->{pass}||'');
-
-      push @cmd, sprintf $cmd, $url_q, $user_q, $pass_q;
+      my $fmt = Text::Sprintf::Named->new({fmt => $cmd});
+      push @cmd, $fmt->format({ args => 
+        {
+          url  => shell_quote($url),
+          user => shell_quote($self->{user}||''),
+          pass => shell_quote($self->{pass}||''),
+	  dest => shell_quote($self->{dest})
+	}});
     }
 
   return wantarray ? @cmd : $cmd[0];
@@ -284,6 +292,15 @@ It also assures that the current working directory is C<< $f->dest() >> while ex
 Command names are printed to stdout, if verbose is set.
 
 =cut
+
+sub add_method
+{
+  my ($self, $name, $pat, $cmd, $desc) = @_;
+  $pat = [$pat] unless ref $pat eq 'ARRAY';
+  $cmd = [$cmd] unless ref $cmd eq 'ARRAY';
+  $desc ||= $cmd->[0];
+  unshift @{$self->{_methods}}, { name => $name, desc => $desc, pat => $pat, cmd => $cmd };
+}
 
 sub get
 {

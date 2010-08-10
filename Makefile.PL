@@ -14,11 +14,12 @@ WriteMakefile(
     PREREQ_PM => {
     	'Test::Pod::Coverage' => 0,
         'Test::More' => 0,
-	'String::ShellQuote' => 0,
 	'Cwd' => 0,
+	'Carp' => 0,
 	'File::Path' => 0,
 	'File::Temp' => 0,
-	'Carp' => 0,
+	'String::ShellQuote' => 0,
+	'Text::Sprintf::Named' => 0
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'URL-Checkout-*' },

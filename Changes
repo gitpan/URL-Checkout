@@ -1,5 +1,9 @@
 Revision history for URL-Checkout
 
+1.04	jw, Wed Aug 11 01:29:25 CEST 2010
+	Using Text::Sprintf::Named for pythonesque %(format)s.
+	Added missing add_method() method.
+
 1.03	jw, Fri Aug  6 14:29:36 CEST 2010
 	Testsuite added with a list of known URLs and Commands.
 	Added 01-init.t, 02-urls.t
