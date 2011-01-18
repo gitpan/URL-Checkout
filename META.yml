@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               URL-Checkout
-version:            1.04
+version:            1.05
 abstract:           Get one or multiple files from a remote location
 author:
     - Juergen Weigert <jnw@cpan.org>

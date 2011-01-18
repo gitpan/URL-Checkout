@@ -15,11 +15,11 @@ URL::Checkout - Get one or multiple files from a remote location
 
 =head1 VERSION
 
-Version 1.04
+Version 1.05
 
 =cut
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 
 
 =head1 SYNOPSIS
@@ -126,15 +126,25 @@ sub new
 
 	my @cmd = (@{$m->{osc}}, '-A', "https://$api", @{$m->{co}});
 	push @cmd, '-r', $rev if defined $rev;
+	## -S aka --server-side-source-service-files, what an ugly name!
 	return [ shell_quote(@cmd, '-S', @pp), shell_quote(@cmd, @pp)];
-      } },
+      },
+      fake_home => { '.oscrc' => q{
+[general]
+apiurl = https://$api
+
+[https://$api]
+user = %(user)s
+pass = %(pass)s
+keyring=0
+} } },
 
     { name => 'git', pat => [qr{(^git://|\.git/?$)}], 
       desc => "git: URLs starting with git:// or ending in .git are handled by 'git clone'",
       cmd => ["git clone --depth 1 %(url)s"] },
 
     { name => 'svn', pat => [qr{^svn://}, qr{[/@]svn(root)?[\./].*/(trunk|branches)/}, qr{[/@]svn(root)?[\./]}], 
-      desc => "Subversion(svn): URLs starting with git:// or containing /svn. follwoed by /trunk/ or /branches/ or containing /svn/ followed by /trunk/ or /branches/ are handled by 'svn checkout'. Second Prio: URLs containing only /svn. or /svn/",
+      desc => "Subversion(svn): URLs starting with git:// or containing /svn. followed by /trunk/ or /branches/ or containing /svn/ followed by /trunk/ or /branches/ are handled by 'svn checkout'. Second Prio: URLs containing only /svn. or /svn/",
       cmd => ["svn --no-auth-cache --non-interactive --trust-server-cert co -q --force %(url)s",
               "svn --no-auth-cache --non-interactive --trust-server-cert --username %(user)s --password %(pass)s co -q --force %(url)s" ] },
 
@@ -302,6 +312,63 @@ sub add_method
   unshift @{$self->{_methods}}, { name => $name, desc => $desc, pat => $pat, cmd => $cmd };
 }
 
+
+=head2 pre_cmd($method)
+
+Helper function run by C<get()>. This prepares temporary files if the method has a 'fake_home' and 
+at least a username credential was given to C<auth()>.
+This also creates the destination directory and changes into it.
+
+=cut
+
+sub pre_cmd
+{
+  my ($self, $m) = @_;
+
+  my $cwd = getcwd();
+  $cwd = $1 if $cwd =~ m{^(.*)$};
+
+  my $dest = $self->dest();
+  File::Path::mkpath($dest);
+  chdir($dest) or croak "cannot chdir('$dest')\n";
+  if ($m->{fake_home} and defined($self->{user}))
+    {
+      my $fake_home = File::Temp::tempdir("co_fake_home_XXXXXX", TMPDIR => 1, UNLINK => 1);
+      chmod 0700, $fake_home;
+      for my $f (keys %{$m->{fake_home}})
+        {
+          my $fmt = Text::Sprintf::Named->new({ fmt => $m->{fake_home}{$f} });
+	  open O, ">", "$fake_home/$f" or croak "pre_cmd: failed to populate fake_home: $f: $!";
+	  print O $fmt->format({ args => { user => $self->{user}||'', pass => $self->{pass}||'' } });
+	  close O;
+	}
+      $self->{saved_fake_home} = $fake_home;
+    }
+  $self->{saved_cwd} = $cwd;
+}
+
+=head2 post_cmd()
+
+Cleanup handler run by C<get()>. This removes any temporary 
+files and restores the current working directory.
+
+=cut
+
+sub post_cmd
+{
+  my ($self) = @_;
+  my $cwd = $self->{saved_cwd};
+  croak "no {saved_cwd}. Called post_cmd() without pre_cmd() ??\n";
+
+  if ($self->{saved_fake_home})
+    {
+      # cleanup that home recursively
+      File::Path::remove_tree($self->{saved_fake_home});
+      delete $self->{saved_fake_home};
+    }
+  chdir($cwd) or croak "cannot chdir back to '$cwd'\n";
+}
+
 sub get
 {
   my ($self, $url) = @_;
@@ -312,10 +379,7 @@ sub get
   my @cmd = $self->fmt_cmd($m, $url);
   croak "no method usable for this url. Need auth?\n" unless @cmd;
 
-  my $cwd = getcwd();
-  my $dest = $self->dest();
-  File::Path::mkpath($dest);
-  chdir($dest) or croak "cannot chdir('$dest')\n";
+  my $cwd = $self->pre_cmd();
 
   my $success = 0;
   for my $c (@cmd)
@@ -331,7 +395,8 @@ sub get
 	  last;
 	}
     }
-  chdir($cwd) or croak "cannot chdir back to '$cwd'\n";
+  $self->post_cmd();
+
   return $success;
 }
 

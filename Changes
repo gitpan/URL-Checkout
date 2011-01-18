@@ -1,5 +1,8 @@
 Revision history for URL-Checkout
 
+1.05    jw, Mon Jan 17 21:30:04 CET 2011
+	added pre_cmd() post_cmd() whith support for fake_home credentials.
+
 1.04	jw, Wed Aug 11 01:29:25 CEST 2010
 	Using Text::Sprintf::Named for pythonesque %(format)s.
 	Added missing add_method() method.
